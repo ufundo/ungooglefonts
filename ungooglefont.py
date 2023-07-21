@@ -2,6 +2,7 @@
 
 import sys
 import os
+from urllib.parse import urlparse, urlunparse
 import requests
 import re
 
@@ -45,53 +46,56 @@ def findCssUrls(url):
         for subcss in findCssUrls(match):
             yield subcss
                 
-
-def findFontUrl(line, fontHost = GOOGLE_FONT_HOST):
-    try:
-        url = line.split(fontHost)[1].split(') ')[0]
-        return 'https://' + fontHost + url
-    except:
-        return None
-
-def localiseCssFonts(inputCss, outputCss, localHost):
+def localiseCssFonts(inputCss, outputCss, localFontsPath):
     
     cssLines = inputCss.readlines()
     
     for i in range(len(cssLines)):
-        fontUrl = findFontUrl(cssLines[i])
-    
-        if fontUrl:
-            urlParts = fontUrl.split('/')
-            fontFace = urlParts[4]
-            fontVariant = urlParts[6]
-            print('google font found: {} ({})'.format(fontFace, fontUrl))        
+        for googleFontUrl in re.findall('url\((https?:\/\/' + GOOGLE_FONT_HOST + '.+)\) format', cssLines[i]): 
+
+            urlParsed = urlparse(googleFontUrl)
+
+            fontFace = urlParsed.path.split('/')[2]
+            print('google font found: {} ({})'.format(fontFace, googleFontUrl))        
             
-            localFontPath = localHost + '/fonts/' + fontFace + '-' + fontVariant
+            localFontPath = localFontsPath + '/' + urlParsed.path[1:].replace('/','-')
             localFont = open(localFontPath, 'wb')
-            download(fontUrl, localFont)
+
+            download(googleFontUrl, localFont)
     
-            cssLines[i] = cssLines[i].replace(fontUrl, 'https://' + localFontPath)
+            cssLines[i] = cssLines[i].replace(googleFontUrl, 'https://' + localFontPath)
     
     for line in cssLines:
         outputCss.write(line)
 
 if len(sys.argv) < 2:
-    raise Exception('Usage: ungooglefonts.py <your_site_host>')
+    raise Exception('Usage: ungooglefonts.py <url>')
 
-siteHost = sys.argv[1]
+siteUrl = urlparse(sys.argv[1], scheme='https')
+siteHost = siteUrl.hostname
 
-for path in [siteHost, siteHost + '/fonts']:
+fontsDir = siteHost + '/fonts'
+cssDir = siteHost + siteUrl.path.replace('/','-')
+
+for path in [siteHost, fontsDir, cssDir]:
     if not os.path.exists(path):
         os.makedirs(path)
 
+googleFontsCssPath = cssDir + '/googleFonts.css'
 
-googleFontsCssPath = siteHost + '/googleFonts.css'
-googleFontsCss = open(googleFontsCssPath, 'x')
+# check file doesn't exist to avoid appending to existing file
+try:
+    googleFontsCss = open(googleFontsCssPath, 'x')
+except:
+    print('Hmmm, {} already exists. Are you sure you want to continue? This could result in duplicate css being appended to the file'.format(googleFontsCssPath))
+    if input('Continue? (yN)') != 'y':
+        quit()
+
 googleFontsCss = open(googleFontsCssPath, 'ab')
 
-print('finding css from https://{}'.format(siteHost))
-
-for cssUrl in findCssUrls('https://' + siteHost):
+siteUrlString = urlunparse(siteUrl)
+print('finding css from https://{}'.format(siteUrlString))
+for cssUrl in findCssUrls(siteUrlString):
     if GOOGLE_CSS_HOST in cssUrl:
         print('google font css --> appending to {}'.format(googleFontsCssPath))
         download(
@@ -102,5 +106,5 @@ for cssUrl in findCssUrls('https://' + siteHost):
             )
     
 print('downloading google fonts occurring in {}'.format(googleFontsCssPath)) 
-localiseCssFonts(open(googleFontsCssPath, 'r'), open(siteHost + '/fonts.css', 'w'), siteHost)
+localiseCssFonts(open(googleFontsCssPath, 'r'), open(cssDir + '/fonts.css', 'w'), fontsDir)
 
