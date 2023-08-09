@@ -53,6 +53,7 @@ def findCssUrls(url):
                 
 def localiseCssFonts(inputCss, outputCss, localFontsPath):
     
+    inputCss.seek(0)
     cssLines = inputCss.readlines()
     
     for i in range(len(cssLines)):
