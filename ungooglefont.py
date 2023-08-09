@@ -73,43 +73,61 @@ def localiseCssFonts(inputCss, outputCss, localFontsPath):
     for line in cssLines:
         outputCss.write(line)
 
-if len(sys.argv) < 2:
-    raise Exception('Usage: ungooglefonts.py <url>')
 
-siteUrl = urlparse(sys.argv[1], scheme='https')
-siteHost = siteUrl.hostname
-
-fontsDir = siteHost + '/fonts'
-cssDir = siteHost + siteUrl.path.replace('/','-')
-
-for path in [siteHost, fontsDir, cssDir]:
-    if not os.path.exists(path):
-        os.makedirs(path)
-
-googleFontsCssPath = cssDir + '/googleFonts.css'
-
-# check file doesn't exist to avoid appending to existing file
-try:
-    googleFontsCss = open(googleFontsCssPath, 'x')
-except:
-    print('Hmmm, {} already exists. Are you sure you want to continue? This could result in duplicate css being appended to the file'.format(googleFontsCssPath))
-    if input('Continue? (yN)') != 'y':
-        quit()
-
-googleFontsCss = open(googleFontsCssPath, 'ab')
-
-siteUrlString = urlunparse(siteUrl)
-print('finding css from https://{}'.format(siteUrlString))
-for cssUrl in findCssUrls(siteUrlString):
-    if GOOGLE_CSS_HOST in cssUrl:
-        print('google font css --> appending to {}'.format(googleFontsCssPath))
-        download(
-            cssUrl,
-            googleFontsCss, 
-            # provide user agent for woff2 support
-            API_REQUEST_HEADERS
-            )
+def processUrl(siteUrl, cssUrls = None):
+    siteUrl = urlparse(siteUrl, scheme='https')
+    siteHost = siteUrl.hostname
     
-print('downloading google fonts occurring in {}'.format(googleFontsCssPath)) 
-localiseCssFonts(open(googleFontsCssPath, 'r'), open(cssDir + '/fonts.css', 'w'), fontsDir)
+    fontsDir = siteHost + '/fonts'
+    cssDir = siteHost + siteUrl.path.replace('/','-')
+    
+    for path in [siteHost, fontsDir, cssDir]:
+        if not os.path.exists(path):
+            os.makedirs(path)
+    
+    googleFontsCssPath = cssDir + '/googleFonts.css'
+    
+    # check file doesn't exist to avoid appending to existing file
+    try:
+        googleFontsCss = open(googleFontsCssPath, 'x')
+    except:
+        print('Hmmm, {} already exists. Are you sure you want to continue? This could result in duplicate css being appended to the file'.format(googleFontsCssPath))
+        if input('Continue? (yN)') != 'y':
+            return 0 
+    
+    googleFontsCss = open(googleFontsCssPath, 'ab')
+    
+    # use css urls explicitly provided on command line
+    if cssUrls:
+        print('using explicitly provided css urls:')
+        for url in cssUrls:
+            print(' - ' + url)
+    else:
+        siteUrlString = urlunparse(siteUrl)
+        print('finding css from {}'.format(siteUrlString))
+        cssUrls = findCssUrls(siteUrlString)
+    
+    
+    for cssUrl in cssUrls:
+        if GOOGLE_CSS_HOST in cssUrl:
+            print('google font css --> appending to {}'.format(googleFontsCssPath))
+            download(
+                cssUrl,
+                googleFontsCss, 
+                # provide user agent for woff2 support
+                API_REQUEST_HEADERS
+                )
 
+    googleFontsCss.close()
+        
+    print('downloading google fonts occurring in {}'.format(googleFontsCssPath)) 
+    localiseCssFonts(open(googleFontsCssPath, 'r'), open(cssDir + '/fonts.css', 'w'), fontsDir)
+
+
+
+if __name__ == "__main__":
+
+    if len(sys.argv) < 2:
+        raise Exception('Usage: ungooglefonts.py <url>')
+
+    processUrl(sys.argv[1], sys.argv[2:])
