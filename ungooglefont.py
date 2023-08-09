@@ -30,16 +30,21 @@ def findCssUrls(url):
     if r.status_code != 200:
         raise Exception('cant get specified url')
 
-    for match in re.findall('<link.+type="text/css".+href="(.+)".+>|<link.+href="(.+)".+type="text/css".+>', r.text):
-        for group in match:
-            if group:
-                print('... found ' + group)
-                yield group
-                # css may import other css
-                for subcss in findCssUrls(group):
-                      yield subcss
+    for match in re.findall('<link.+href="(.+\.css)".*?>', r.text):
+        print('... found ' + match)
+        yield match 
+        # css may import other css
+        for subcss in findCssUrls(match):
+            yield subcss
 
     for match in re.findall('@import url\((.+)\)', r.text):
+        print('... found ' + match)
+        yield match 
+        # css may import other css
+        for subcss in findCssUrls(match):
+            yield subcss
+
+    for match in re.findall('@import\"(.+?)\"', r.text):
         print('... found ' + match)
         yield match 
         # css may import other css
